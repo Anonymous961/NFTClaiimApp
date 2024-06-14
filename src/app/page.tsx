@@ -1,32 +1,74 @@
+"use client";
 import Image from "next/image";
-import { ConnectButton, useWalletBalance } from "thirdweb/react";
+import {
+  ConnectButton,
+  MediaRenderer,
+  useReadContract,
+  useWalletBalance,
+} from "thirdweb/react";
 import thirdwebIcon from "@public/thirdweb.svg";
 import { client } from "./client";
-import { sepolia } from "thirdweb/chains";
+import { defineChain, sepolia } from "thirdweb/chains";
 import { createWallet, inAppWallet, walletConnect } from "thirdweb/wallets";
+import { getContract, toEther } from "thirdweb";
+import { getContractMetadata } from "thirdweb/extensions/common";
+import {
+  getActiveClaimCondition,
+  getTotalClaimedSupply,
+  nextTokenIdToMint,
+} from "thirdweb/extensions/erc721";
 
-const wallets = [
-  createWallet("io.metamask"),
-  createWallet("com.coinbase.wallet"),
-  walletConnect(),
-  inAppWallet({
-    auth: {
-      options: ["email", "google", "apple", "facebook", "phone"],
-    },
-  }),
-];
+export default function Home() {
+  const chain = defineChain(sepolia);
+  console.log(chain);
 
-export default async function Home() {
-  const chain = sepolia;
-  const contractAddress = "0x6982CDAb4f08d1ac0822dB081e3EB42552d60D38";
+  const contract = getContract({
+    client,
+    chain: chain,
+    address: "0x6982CDAb4f08d1ac0822dB081e3EB42552d60D38",
+  });
+
+  const { data: contractMetadata, isLoading: isContractMetaDataLoading } =
+    useReadContract(getContractMetadata, {
+      contract: contract,
+    });
+  console.log(contractMetadata);
+
+  const { data: claimedSupply } = useReadContract(getTotalClaimedSupply, {
+    contract: contract,
+  });
+
+  const { data: tottalNFTSupply } = useReadContract(nextTokenIdToMint, {
+    contract: contract,
+  });
+
+  const { data: claimCondition } = useReadContract(getActiveClaimCondition, {
+    contract: contract,
+  });
+
+  const getPrice = (quantity: number) => {
+    const total =
+      quantity * parseInt(claimCondition?.pricePerToken.toString() || "0");
+    return toEther(BigInt(total));
+  };
 
   return (
     <main className="p-4 pb-10 min-h-[100vh] flex items-center justify-center container max-w-screen-lg mx-auto">
-      <div className="py-20">
+      <div className="py-20 text-center">
         <Header />
-
-        <div className="flex justify-center mb-20">
-          <ConnectButton client={client} />
+        <ConnectButton client={client} chain={chain} />
+        <div className="flex flex-col items-center mt-4">
+          {isContractMetaDataLoading ? (
+            <p>Loading...</p>
+          ) : (
+            <>
+              <MediaRenderer
+                client={client}
+                src={contractMetadata?.image}
+                className="rounded-xl"
+              />
+            </>
+          )}
         </div>
       </div>
     </main>
