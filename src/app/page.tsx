@@ -3,6 +3,8 @@ import Image from "next/image";
 import {
   ConnectButton,
   MediaRenderer,
+  TransactionButton,
+  useActiveAccount,
   useReadContract,
   useWalletBalance,
 } from "thirdweb/react";
@@ -13,14 +15,19 @@ import { createWallet, inAppWallet, walletConnect } from "thirdweb/wallets";
 import { getContract, toEther } from "thirdweb";
 import { getContractMetadata } from "thirdweb/extensions/common";
 import {
+  claimTo,
   getActiveClaimCondition,
   getTotalClaimedSupply,
   nextTokenIdToMint,
 } from "thirdweb/extensions/erc721";
+import { useActionState, useState } from "react";
 
 export default function Home() {
-  const chain = defineChain(sepolia);
-  console.log(chain);
+  const account = useActiveAccount();
+  const chain = sepolia;
+
+  const [quantity, setQuantity] = useState(1);
+  // console.log(chain);
 
   const contract = getContract({
     client,
@@ -32,15 +39,16 @@ export default function Home() {
     useReadContract(getContractMetadata, {
       contract: contract,
     });
-  console.log(contractMetadata);
 
-  const { data: claimedSupply } = useReadContract(getTotalClaimedSupply, {
-    contract: contract,
-  });
+  const { data: claimedSupply, isLoading: isClaimedSupplyLoading } =
+    useReadContract(getTotalClaimedSupply, {
+      contract: contract,
+    });
 
-  const { data: tottalNFTSupply } = useReadContract(nextTokenIdToMint, {
-    contract: contract,
-  });
+  const { data: totalNFTSupply, isLoading: isTotalSupplyLoading } =
+    useReadContract(nextTokenIdToMint, {
+      contract: contract,
+    });
 
   const { data: claimCondition } = useReadContract(getActiveClaimCondition, {
     contract: contract,
@@ -57,18 +65,71 @@ export default function Home() {
       <div className="py-20 text-center">
         <Header />
         <ConnectButton client={client} chain={chain} />
-        <div className="flex flex-col items-center mt-4">
-          {isContractMetaDataLoading ? (
-            <p>Loading...</p>
-          ) : (
-            <>
-              <MediaRenderer
-                client={client}
-                src={contractMetadata?.image}
-                className="rounded-xl"
+        <div className="grid grid-cols-2">
+          <div className="flex flex-col items-center mt-4">
+            {isContractMetaDataLoading ? (
+              <p>Loading...</p>
+            ) : (
+              <>
+                <MediaRenderer
+                  client={client}
+                  src={contractMetadata?.image}
+                  className="rounded-xl"
+                />
+              </>
+            )}
+          </div>
+          <div>
+            {isClaimedSupplyLoading || isTotalSupplyLoading ? (
+              <p>Loading...</p>
+            ) : (
+              <div>
+                <h2 className="text-3xl font-semibold mt-4">
+                  {contractMetadata?.name}
+                </h2>
+                <p className="text-lg mt-2">{contractMetadata?.description}</p>
+                <p className="text-lg mt-2 font-bold">
+                  Total NFT Supply : {claimedSupply?.toString()}/
+                  {totalNFTSupply?.toString()}
+                </p>
+              </div>
+            )}
+            <div className="flex flex-row items-center justify-center my-4">
+              <button
+                className="bg-black text-white px-4 py-2 rounded-md mr-4"
+                onClick={() => setQuantity(Math.max(1, quantity - 1))}
+              >
+                -
+              </button>
+              <input
+                type="number"
+                value={quantity}
+                onChange={(e) => setQuantity(parseInt(e.target.value))}
+                className="w-10 text-center border border-gray-300 rounded-md bg-black text-white"
               />
-            </>
-          )}
+              <button
+                className="bg-black text-white px-4 py-2 rounded-md mr-4"
+                onClick={() => setQuantity(Math.min(quantity + 1))}
+              >
+                +
+              </button>
+            </div>
+            <TransactionButton
+              transaction={() =>
+                claimTo({
+                  contract: contract,
+                  to: account?.address || "",
+                  quantity: BigInt(quantity),
+                })
+              }
+              onTransactionConfirmed={async () => {
+                alert("NFT claimed!");
+                setQuantity(1);
+              }}
+            >
+              {`Claim NFT (${getPrice(quantity)} ETH)`}
+            </TransactionButton>
+          </div>
         </div>
       </div>
     </main>
@@ -77,7 +138,7 @@ export default function Home() {
 
 function Header() {
   return (
-    <header className="flex flex-row items-center ">
+    <header className="flex items-center justify-center">
       <Image
         src={thirdwebIcon}
         alt=""
